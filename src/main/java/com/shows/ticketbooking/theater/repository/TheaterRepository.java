@@ -1,9 +1,11 @@
 package com.shows.ticketbooking.theater.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import com.shows.ticketbooking.theater.entity.Theater;
 
-import jakarta.persistence.Entity;
 
-public interface TheaterRepository extends JpaRepository<Entity, Long>{
+@Repository
+public interface TheaterRepository extends JpaRepository<Theater, Long>{
     
 }
