@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -118,6 +119,16 @@ class ShowSeatServiceTest {
         // Verify transaction rollback
         assertThat(updatedShowSeat.getStatus())
                 .isEqualTo(SeatStatus.HELD);
+
+        assertThatThrownBy(() -> showSeatService.holdSeat(showSeatId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Seat not available to Book");
+
+        // The seat must remain HELD
+        ShowSeat finalSeat = showSeatRepository.findById(showSeatId)
+                .orElseThrow();
+
+        assertThat(finalSeat.getStatus()).isEqualTo(SeatStatus.HELD);
     }
 }
 
