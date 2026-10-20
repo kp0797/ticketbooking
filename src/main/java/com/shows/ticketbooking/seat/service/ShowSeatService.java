@@ -18,9 +18,13 @@ public class ShowSeatService {
     @Transactional
     public void holdSeat(Long showSeatId) {
 
-        ShowSeat showSeat = showSeatRepository.findById(showSeatId)
+        ShowSeat showSeat = showSeatRepository.findByIdForUpdate(showSeatId)
                             .orElseThrow(() -> new IllegalArgumentException("Show Seat Not found" + showSeatId));
-        showSeat.setStatus(SeatStatus.HELD); 
+
+        if(showSeat.getStatus() != SeatStatus.AVAILABLE) {
+            throw new IllegalStateException("Seat not available to Book" + showSeatId);
+        }
+        showSeat.setStatus(SeatStatus.HELD);
         
     }
 }

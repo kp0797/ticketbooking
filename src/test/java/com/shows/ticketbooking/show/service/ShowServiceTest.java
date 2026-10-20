@@ -100,7 +100,7 @@ class ShowServiceTest {
 
         // Execute service
         List<ShowSummary> result =
-                showService.getAllUpcomingShows(movie.getMovieId(), now);
+                showService.getAllUpcomingShows(movie.getMovieId());
 
         // Verify count
         assertThat(result)
