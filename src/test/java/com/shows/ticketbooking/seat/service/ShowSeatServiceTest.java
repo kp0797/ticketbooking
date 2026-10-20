@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.concurrent.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
@@ -50,9 +52,7 @@ class ShowSeatServiceTest {
     @Autowired
     private ShowSeatRepository showSeatRepository;
 
-    @Test
-    void shouldHoldShowSeat() {
-
+    private ShowSeat createAvailableShowSeat() {
         // Create Movie
         Movie movie = new Movie();
         movie.setMovieName("Interstellar");
@@ -101,6 +101,13 @@ class ShowSeatServiceTest {
         showSeat.setBasePrice(BigDecimal.valueOf(250));
         showSeat = showSeatRepository.save(showSeat);
 
+        return showSeat;
+    }
+
+    @Test
+    void shouldHoldShowSeat() {
+
+        ShowSeat showSeat = createAvailableShowSeat();
         // Capture ID in a variable that is effectively final
         Long showSeatId = showSeat.getShowSeatId();
 
@@ -130,5 +137,66 @@ class ShowSeatServiceTest {
 
         assertThat(finalSeat.getStatus()).isEqualTo(SeatStatus.HELD);
     }
+
+    @Test
+    void shouldAllowOnlyOneConcurrentHoldForSameSeat() throws Exception {
+
+        Long showSeatId = createAvailableShowSeat().getShowSeatId();
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Boolean> first = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+
+                try {
+                    showSeatService.holdSeat(showSeatId);
+                    return true;
+                } catch (IllegalStateException ex) {
+                    return false;
+                }
+            });
+
+            Future<Boolean> second = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+
+                try {
+                    showSeatService.holdSeat(showSeatId);
+                    return true;
+                } catch (IllegalStateException ex) {
+                    return false;
+                }
+            });
+
+            // Wait until both threads are ready
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+
+            // Release both threads together
+            start.countDown();
+
+            boolean firstSucceeded = first.get(10, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(10, TimeUnit.SECONDS);
+
+            // Exactly one request should succeed
+            assertThat(firstSucceeded).isNotEqualTo(secondSucceeded);
+
+            // The seat must end up HELD
+            ShowSeat persistedSeat = showSeatRepository
+                    .findById(showSeatId)
+                    .orElseThrow();
+
+            assertThat(persistedSeat.getStatus())
+                    .isEqualTo(SeatStatus.HELD);
+
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
 }
 
