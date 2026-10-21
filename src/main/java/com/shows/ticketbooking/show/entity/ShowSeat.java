@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -48,4 +50,10 @@ public class ShowSeat {
     @NotNull
     @Column(name = "base_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal basePrice;
+
+    @Column(name = "hold_token")
+    private UUID holdToken;
+
+    @Column(name = "hold_expires_at")
+    private OffsetDateTime holdExpiresAt;
 }

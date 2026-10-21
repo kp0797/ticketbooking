@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,6 +124,11 @@ class ShowSeatServiceTest {
                 .findById(showSeatId)
                 .orElseThrow();
 
+        // Verify HoldToken and HoldExpiresAt
+        assertThat(updatedShowSeat.getHoldToken()).isNotNull();
+
+        assertThat(updatedShowSeat.getHoldExpiresAt()).isAfter(OffsetDateTime.now());
+
         // Verify transaction rollback
         assertThat(updatedShowSeat.getStatus())
                 .isEqualTo(SeatStatus.HELD);
@@ -196,6 +202,76 @@ class ShowSeatServiceTest {
             start.countDown();
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void shouldReclaimExpiredHoldAndReplaceToken() {
+
+        ShowSeat showSeat = createAvailableShowSeat();
+
+        UUID oldToken = UUID.randomUUID();
+        OffsetDateTime expiredAt = OffsetDateTime.now().minusMinutes(1);
+
+        // Simulate a previous hold that has expired
+        showSeat.setStatus(SeatStatus.HELD);
+        showSeat.setHoldToken(oldToken);
+        showSeat.setHoldExpiresAt(expiredAt);
+
+        showSeatRepository.saveAndFlush(showSeat);
+
+        Long showSeatId = showSeat.getShowSeatId();
+
+        // Reclaim the seat
+        UUID newToken = showSeatService.holdSeat(showSeatId);
+
+        // Verify the persisted result
+        ShowSeat reclaimedSeat = showSeatRepository
+                .findById(showSeatId)
+                .orElseThrow();
+
+        assertThat(newToken)
+                .isNotNull()
+                .isNotEqualTo(oldToken);
+
+        assertThat(reclaimedSeat.getStatus())
+                .isEqualTo(SeatStatus.HELD);
+
+        assertThat(reclaimedSeat.getHoldToken())
+                .isEqualTo(newToken);
+
+        assertThat(reclaimedSeat.getHoldExpiresAt())
+                .isAfter(OffsetDateTime.now());
+    }
+
+    @Test
+    void shouldRejectHoldingBookedSeat() {
+
+        ShowSeat showSeat = createAvailableShowSeat();
+        showSeat.setStatus(SeatStatus.BOOKED);
+        showSeatRepository.saveAndFlush(showSeat);
+
+        Long showSeatId = showSeat.getShowSeatId();
+
+        assertThatThrownBy(() -> showSeatService.holdSeat(showSeatId))
+                .isInstanceOf(IllegalStateException.class);
+
+        ShowSeat persistedSeat = showSeatRepository
+                .findById(showSeatId)
+                .orElseThrow();
+
+        assertThat(persistedSeat.getStatus())
+                .isEqualTo(SeatStatus.BOOKED);
+    }
+
+    @Test
+    void shouldRejectHoldWhenShowSeatDoesNotExist() {
+
+        Long nonExistingShowSeatId = Long.MAX_VALUE;
+
+        assertThatThrownBy(
+                () -> showSeatService.holdSeat(nonExistingShowSeatId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Show Seat Not found");
     }
 
 }
